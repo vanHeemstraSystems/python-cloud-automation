@@ -1,0 +1,94 @@
+{
+  "tags": [
+    {
+      "name": "Environment",
+      "required": true,
+      "allowed_values": [
+        "Development",
+        "Dev",
+        "Test",
+        "Testing",
+        "QA",
+        "Staging",
+        "Production",
+        "Prod"
+      ],
+      "default_value": "Unknown",
+      "description": "Deployment environment - indicates which stage of the software lifecycle this resource belongs to"
+    },
+    {
+      "name": "CostCenter",
+      "required": true,
+      "allowed_values": null,
+      "default_value": "Unassigned",
+      "description": "Cost center code for billing and chargeback - used for accurate cost allocation to departments"
+    },
+    {
+      "name": "Owner",
+      "required": true,
+      "allowed_values": null,
+      "default_value": "Unassigned",
+      "description": "Resource owner - email address or team name responsible for this resource"
+    },
+    {
+      "name": "Project",
+      "required": true,
+      "allowed_values": null,
+      "default_value": "Unassigned",
+      "description": "Project or initiative name - links resources to business projects for tracking"
+    },
+    {
+      "name": "Criticality",
+      "required": true,
+      "allowed_values": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+      ],
+      "default_value": "Medium",
+      "description": "Business criticality level - indicates the impact if this resource fails"
+    },
+    {
+      "name": "DataClassification",
+      "required": false,
+      "allowed_values": [
+        "Public",
+        "Internal",
+        "Confidential",
+        "Restricted"
+      ],
+      "default_value": "Internal",
+      "description": "Data sensitivity classification - determines security and compliance requirements"
+    },
+    {
+      "name": "BackupRequired",
+      "required": false,
+      "allowed_values": [
+        "Yes",
+        "No"
+      ],
+      "default_value": "No",
+      "description": "Indicates whether this resource requires backup - used for backup policy automation"
+    },
+    {
+      "name": "ComplianceScope",
+      "required": false,
+      "allowed_values": [
+        "None",
+        "GDPR",
+        "HIPAA",
+        "SOC2",
+        "ISO27001",
+        "PCI-DSS"
+      ],
+      "default_value": "None",
+      "description": "Compliance frameworks applicable to this resource - triggers specific compliance controls"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-01-01",
+    "description": "Required and recommended tags for Azure resource governance"
+  }
+}
