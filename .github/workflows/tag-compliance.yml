@@ -1,0 +1,212 @@
+name: Azure Tag Compliance Check
+
+on:
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:  # Manual trigger
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'requirements.txt'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run linting
+        run: |
+          pylint src/ --fail-under=8.0
+          black src/ --check
+      
+      - name: Run security scan
+        run: |
+          bandit -r src/ -f json -o bandit-report.json
+      
+      - name: Run tests
+        run: |
+          pytest tests/ --cov=src --cov-report=xml --cov-report=html --junitxml=junit.xml
+      
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: |
+            junit.xml
+            htmlcov/
+            bandit-report.json
+
+  compliance-check:
+    name: Azure Compliance Check
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Run Compliance Check
+        id: compliance
+        run: |
+          python src/tag_compliance.py
+          echo "compliance_rate=$(jq -r '.summary.overall_compliance_rate' results/reports/compliance_report_*.json | tail -1)" >> $GITHUB_OUTPUT
+        continue-on-error: true
+      
+      - name: Generate HTML Dashboard
+        run: |
+          python src/reporters/html_reporter.py
+      
+      - name: Generate CSV Report
+        run: |
+          python src/reporters/csv_reporter.py
+      
+      - name: Upload Compliance Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-reports-${{ github.run_number }}
+          path: results/reports/
+          retention-days: 90
+      
+      - name: Upload Dashboards
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-dashboards-${{ github.run_number }}
+          path: results/dashboards/
+          retention-days: 30
+      
+      - name: Send Slack Notification
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          COMPLIANCE_RATE: ${{ steps.compliance.outputs.compliance_rate }}
+        run: |
+          python src/reporters/notification.py --platform slack --compliance-rate $COMPLIANCE_RATE
+      
+      - name: Create Issue for Low Compliance
+        if: steps.compliance.outputs.compliance_rate < 80
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const complianceRate = '${{ steps.compliance.outputs.compliance_rate }}';
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Low Tag Compliance Detected: ${complianceRate}%`,
+              body: `## Compliance Alert
+              
+              The automated tag compliance check has detected compliance below threshold.
+              
+              **Current Compliance Rate**: ${complianceRate}%
+              **Threshold**: 80%
+              **Run Number**: ${{ github.run_number }}
+              
+              ### Next Steps
+              1. Review the compliance report in the workflow artifacts
+              2. Identify top violating resource groups
+              3. Coordinate with resource owners for remediation
+              
+              ### Reports
+              - [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              - Download artifacts from the workflow run above
+              
+              **Automated by**: Azure Tag Compliance Workflow`,
+              labels: ['compliance', 'automation', 'priority:high']
+            })
+      
+      - name: Comment on PR (if PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const complianceRate = '${{ steps.compliance.outputs.compliance_rate }}' || 'N/A';
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## 🔍 Compliance Check Results
+              
+              **Compliance Rate**: ${complianceRate}%
+              
+              Test and compliance checks have completed. Review the workflow artifacts for detailed reports.`
+            })
+
+  schedule-metrics:
+    name: Update Metrics Dashboard
+    runs-on: ubuntu-latest
+    needs: compliance-check
+    if: github.event_name == 'schedule'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download Reports
+        uses: actions/download-artifact@v3
+        with:
+          name: compliance-reports-${{ github.run_number }}
+          path: results/reports/
+      
+      - name: Update Historical Metrics
+        run: |
+          python src/reporters/update_metrics.py
+      
+      - name: Commit Metrics
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add results/metrics/
+          git commit -m "Update compliance metrics - $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          git push || echo "No changes to push"
