@@ -1,0 +1,45 @@
+# Azure SDK Dependencies
+azure-identity==1.15.0
+azure-mgmt-resource==23.1.1
+azure-mgmt-subscription==3.1.1
+azure-mgmt-costmanagement==4.0.1
+
+# Data Processing & Analysis
+pandas==2.2.0
+numpy==1.26.3
+
+# Visualization
+matplotlib==3.8.2
+plotly==5.18.0
+seaborn==0.13.1
+
+# Reporting
+jinja2==3.1.3
+openpyxl==3.1.2
+
+# Testing
+pytest==7.4.4
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-asyncio==0.23.3
+
+# Code Quality
+pylint==3.0.3
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0
+bandit==1.7.6
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+pyyaml==6.0.1
+click==8.1.7
+rich==13.7.0
+
+# Notifications
+slack-sdk==3.26.2
+pymsteams==0.2.2
+
+# Logging & Monitoring
+structlog==24.1.0
